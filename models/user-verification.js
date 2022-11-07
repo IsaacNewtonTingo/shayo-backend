@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 const Schema = mongoose.Schema;
 
 const UserVerificationSchema = new Schema({
-  userId: String,
+  userID: String,
   confirmationCode: String,
   createdAt: Date,
   expiresAt: Date,

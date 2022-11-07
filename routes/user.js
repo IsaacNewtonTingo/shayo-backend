@@ -123,7 +123,7 @@ const sendVerificationEmail = ({ _id, email }, res) => {
     from: process.env.AUTH_EMAIL,
     to: email,
     subject: "Verify your email",
-    html: `<p>Hello.<br/>Verify your email to complete your signup process.<br/>Here is your verification code: <h2>${confirmationCode}</h2><br/>The code expires in the next 1hr.</p>`,
+    html: `<p>Hello,<br/>Verify your email to complete your signup process.<br/>Here is your verification code: <h2>${confirmationCode}</h2><br/>The code expires in the next 1hr.</p>`,
   };
 
   const saltRounds = 10;
@@ -131,7 +131,7 @@ const sendVerificationEmail = ({ _id, email }, res) => {
     .hash(confirmationCode, saltRounds)
     .then((hashedConfirmationCode) => {
       const newVerification = new UserVerification({
-        userId: _id,
+        userID: _id,
         confirmationCode: hashedConfirmationCode,
         createdAt: Date.now(),
         expiresAt: Date.now() + 3600000,
@@ -145,6 +145,7 @@ const sendVerificationEmail = ({ _id, email }, res) => {
               res.json({
                 status: "Pending",
                 message: "Verification email sent",
+                data: _id,
               });
             })
             .catch((err) => {
@@ -173,6 +174,88 @@ const sendVerificationEmail = ({ _id, email }, res) => {
 };
 
 //email verification code validation
-router.post("/verify-email-code", async (req, res) => {});
+router.post("/verify-email", async (req, res) => {
+  let { confirmationCode, userID } = req.body;
+
+  confirmationCode = confirmationCode.trim();
+  userID = userID.trim();
+
+  UserVerification.find({ userID })
+    .then(async (response) => {
+      if (response.length > 0) {
+        //records found
+        //check if code has expired
+        const { expiresAt } = response[0];
+        const hashedCode = response[0].confirmationCode;
+
+        if (expiresAt < Date.now()) {
+          //Has expired so delete
+          await UserVerification.deleteMany({ userID })
+            .then(() => {
+              res.json({
+                status: "Failed",
+                message: "The code you entered has already expired",
+              });
+            })
+            .catch((err) => {
+              console.log(err);
+              res.json({
+                status: "Failed",
+                message: "Error occured while deleting expired code",
+              });
+            });
+        } else {
+          //has not expired
+          //decrypt the code
+          await bcrypt
+            .compare(confirmationCode, hashedCode)
+            .then(async (response) => {
+              if (response) {
+                //delete record
+                await UserVerification.deleteMany({ userID })
+                  .then(() => {
+                    res.json({
+                      status: "Success",
+                      message: "Email confirmed successfully. You can login",
+                    });
+                  })
+                  .catch((err) => {
+                    console.log(err);
+                    res.json({
+                      status: "Failed",
+                      message: "Error occured while deleting confirmed code",
+                    });
+                  });
+              } else {
+                res.json({
+                  status: "Failed",
+                  message: "Invalid code",
+                });
+              }
+            })
+            .catch((err) => {
+              console.log(err);
+              res.json({
+                status: "Failed",
+                message: "Error occured while comparing codes",
+              });
+            });
+        }
+      } else {
+        //no records found
+        res.json({
+          status: "Failed",
+          message: "No email verification records found",
+        });
+      }
+    })
+    .catch((err) => {
+      console.log(err);
+      res.json({
+        status: "Failed",
+        message: "Error occured finding verification records",
+      });
+    });
+});
 
 module.exports = router;
