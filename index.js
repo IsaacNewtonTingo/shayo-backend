@@ -15,3 +15,7 @@ app.listen(PORT, () => {
 });
 
 require("./config/db");
+
+const UserRouter = require("./routes/user");
+
+app.use("/user", UserRouter);
