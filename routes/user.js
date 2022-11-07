@@ -191,11 +191,22 @@ router.post("/verify-email", async (req, res) => {
         if (expiresAt < Date.now()) {
           //Has expired so delete
           await UserVerification.deleteMany({ userID })
-            .then(() => {
-              res.json({
-                status: "Failed",
-                message: "The code you entered has already expired",
-              });
+            .then(async () => {
+              await User.deleteOne({ _id: userID })
+                .then(() => {
+                  res.json({
+                    status: "Failed",
+                    message:
+                      "The code you entered has already expired. Please sign up again",
+                  });
+                })
+                .catch((err) => {
+                  console.log(err);
+                  res.json({
+                    status: "Failed",
+                    message: "Error occured while deleting expired user",
+                  });
+                });
             })
             .catch((err) => {
               console.log(err);
@@ -257,5 +268,8 @@ router.post("/verify-email", async (req, res) => {
       });
     });
 });
+
+//resend code
+router.post("/resend-email-verification-code", async (req, res) => {});
 
 module.exports = router;
