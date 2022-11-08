@@ -174,8 +174,9 @@ const sendVerificationEmail = ({ _id, email }, res) => {
 };
 
 //email verification code validation
-router.post("/verify-email", async (req, res) => {
-  let { confirmationCode, userID } = req.body;
+router.post("/verify-email/:id", async (req, res) => {
+  let { confirmationCode } = req.body;
+  let userID = req.params.id;
 
   confirmationCode = confirmationCode.trim();
   userID = userID.trim();
@@ -224,11 +225,23 @@ router.post("/verify-email", async (req, res) => {
               if (response) {
                 //delete record
                 await UserVerification.deleteMany({ userID })
-                  .then(() => {
-                    res.json({
-                      status: "Success",
-                      message: "Email confirmed successfully. You can login",
-                    });
+                  .then(async () => {
+                    //update user records
+                    await User.updateOne({ _id: userID }, { verified: true })
+                      .then(() => {
+                        res.json({
+                          status: "Success",
+                          message:
+                            "Email confirmed successfully. You can login",
+                        });
+                      })
+                      .catch((err) => {
+                        console.log(err);
+                        res.json({
+                          status: "Failed",
+                          message: "Error occured while updating user records",
+                        });
+                      });
                   })
                   .catch((err) => {
                     console.log(err);
@@ -270,6 +283,50 @@ router.post("/verify-email", async (req, res) => {
 });
 
 //resend code
-router.post("/resend-email-verification-code", async (req, res) => {});
+router.post("/resend-email-verification-code/:id", async (req, res) => {
+  //check if user has already created account
+  const userID = req.params.id;
+  await User.findOne({ _id: userID })
+    .then(async (userResponse) => {
+      if (userResponse) {
+        //user found
+        //check preexisting code and delate
+        await UserVerification.findOneAndDelete({ userID })
+          .then((response) => {
+            if (response) {
+              //records found and deleted
+              //send new code and save
+              sendVerificationEmail(userResponse, res);
+            } else {
+              //no record found
+              res.json({
+                status: "Failed",
+                message: "User verification records not found.Please signup",
+              });
+            }
+          })
+          .catch((err) => {
+            console.log(err);
+            res.json({
+              status: "Failed",
+              message: "Error occured while getting user verification records",
+            });
+          });
+      } else {
+        //no user
+        res.json({
+          status: "Failed",
+          message: "User not found. Please create an account",
+        });
+      }
+    })
+    .catch((err) => {
+      console.log(err);
+      res.json({
+        status: "Failed",
+        message: "Error occured while checking user records",
+      });
+    });
+});
 
 module.exports = router;
